@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LetterCheck Beta - Document Analyzer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">LetterCheck Beta</h1>
+            <p class="text-gray-600">Upload legal documents to find contradictions instantly</p>
+            <span class="inline-block mt-2 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
+                🔒 Private Beta - Your files are processed locally
+            </span>
+        </div>
+
+        <!-- Upload Card -->
+        <div class="bg-white rounded-2xl shadow-xl p-8">
+            <div id="dropzone" class="border-3 border-dashed border-gray-300 rounded-xl p-8 text-center transition-all hover:border-indigo-400 hover:bg-indigo-50">
+                <svg class="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M24 14v16m-8-8h16M12 2l1.41 1.41L7.83 9H20V2h-8zm24 0v7h12.17l-5.58-5.59L36 2h-8zm0 46l-1.41-1.41L40.17 41H28v7h8zm-24 0v-7H.83l5.58 5.59L12 46h8z"/>
+                </svg>
+                <input type="file" id="fileInput" multiple accept=".pdf,.docx" class="hidden">
+                <p class="text-lg font-medium text-gray-700 mb-2">
+                    Drop your documents here
+                </p>
+                <p class="text-sm text-gray-500 mb-4">or</p>
+                <button onclick="document.getElementById('fileInput').click()" 
+                        class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                    Browse Files
+                </button>
+                <p class="text-xs text-gray-400 mt-4">Supports PDF and DOCX • Max 10MB per file</p>
+            </div>
+
+            <!-- File List -->
+            <div id="fileList" class="hidden mt-6">
+                <h3 class="font-semibold text-gray-700 mb-3">Selected Documents:</h3>
+                <div id="files" class="space-y-2"></div>
+            </div>
+
+            <!-- Analyze Button -->
+            <button id="analyzeBtn" onclick="analyze()" 
+                    class="hidden w-full mt-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg transform transition-all hover:scale-[1.02] hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                <span id="btnText">Analyze for Contradictions</span>
+                <span id="btnLoading" class="hidden">
+                    <svg class="inline animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Processing Documents...
+                </span>
+            </button>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" class="mt-8"></div>
+
+        <!-- Footer -->
+        <div class="text-center mt-12 text-sm text-gray-500">
+            <p>Beta version • Running locally via n8n</p>
+            <p>Questions? Contact your administrator</p>
+        </div>
+    </div>
+
+    <script>
+        // Your domain's API endpoint
+        const API_URL = 'https://api.mambametrics.com/webhook/lettercheck/upload';
+        let selectedFiles = [];
+
+        // Drag and drop handlers
+        const dropzone = document.getElementById('dropzone');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => {
+                dropzone.classList.add('bg-indigo-50', 'border-indigo-400');
+            });
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => {
+                dropzone.classList.remove('bg-indigo-50', 'border-indigo-400');
+            });
+        });
+        
+        dropzone.addEventListener('drop', (e) => {
+            const files = Array.from(e.dataTransfer.files);
+            handleFiles(files);
+        });
+        
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            handleFiles(files);
+        });
+        
+        function handleFiles(files) {
+            selectedFiles = files.filter(f => 
+                f.type === 'application/pdf' || 
+                f.name.endsWith('.docx')
+            );
+            
+            if (selectedFiles.length > 0) {
+                displayFiles();
+                document.getElementById('fileList').classList.remove('hidden');
+                document.getElementById('analyzeBtn').classList.remove('hidden');
+            }
+        }
+        
+        function displayFiles() {
+            const html = selectedFiles.map((file, i) => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center">
+                        <svg class="h-8 w-8 mr-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                            <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 1 1 0 000 2H6a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2 1 1 0 100-2 2 2 0 012 2v11a4 4 0 01-4 4H6a4 4 0 01-4-4V5z"/>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-gray-700">${file.name}</p>
+                            <p class="text-sm text-gray-500">${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                    </div>
+                    <button onclick="removeFile(${i})" class="text-red-500 hover:text-red-700">
+                        <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/>
+                        </svg>
+                    </button>
+                </div>
+            `).join('');
+            
+            document.getElementById('files').innerHTML = html;
+        }
+        
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            if (selectedFiles.length === 0) {
+                document.getElementById('fileList').classList.add('hidden');
+                document.getElementById('analyzeBtn').classList.add('hidden');
+            } else {
+                displayFiles();
+            }
+        }
+        
+        async function analyze() {
+            const btn = document.getElementById('analyzeBtn');
+            btn.disabled = true;
+            document.getElementById('btnText').classList.add('hidden');
+            document.getElementById('btnLoading').classList.remove('hidden');
+            
+            const formData = new FormData();
+            selectedFiles.forEach((file, i) => {
+                formData.append(`data${i}`, file);
+            });
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.text();
+                
+                // Check if result is HTML (from your n8n workflow)
+                if (result.includes('<!DOCTYPE html>')) {
+                    document.getElementById('results').innerHTML = `
+                        <div class="bg-white rounded-2xl shadow-xl p-8">
+                            ${result}
+                        </div>
+                    `;
+                } else {
+                    // Try parsing as JSON
+                    try {
+                        const data = JSON.parse(result);
+                        displayJsonResults(data);
+                    } catch {
+                        document.getElementById('results').innerHTML = `
+                            <div class="bg-white rounded-2xl shadow-xl p-8">
+                                <pre>${result}</pre>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (error) {
+                document.getElementById('results').innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p class="text-red-700">Error: ${error.message}</p>
+                        <p class="text-sm text-red-600 mt-2">Make sure your n8n workflow is running locally.</p>
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                document.getElementById('btnText').classList.remove('hidden');
+                document.getElementById('btnLoading').classList.add('hidden');
+            }
+        }
+        
+        function displayJsonResults(data) {
+            if (!data.contradictions || data.contradictions.length === 0) {
+                document.getElementById('results').innerHTML = `
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+                        <svg class="h-12 w-12 text-green-500 mx-auto mb-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                        </svg>
+                        <p class="text-green-800 font-semibold">No contradictions found!</p>
+                        <p class="text-green-600 text-sm mt-1">All documents appear to be consistent.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const html = `
+                <div class="bg-white rounded-2xl shadow-xl p-8">
+                    <h2 class="text-2xl font-bold mb-6">Found ${data.contradictions.length} Contradiction${data.contradictions.length > 1 ? 's' : ''}</h2>
+                    <div class="space-y-4">
+                        ${data.contradictions.map(c => `
+                            <div class="border-l-4 ${
+                                c.severity === 'High' ? 'border-red-500 bg-red-50' :
+                                c.severity === 'Medium' ? 'border-yellow-500 bg-yellow-50' :
+                                'border-green-500 bg-green-50'
+                            } p-4 rounded-r-lg">
+                                <div class="flex justify-between items-start mb-2">
+                                    <span class="font-semibold text-gray-800">${c.claim || 'Contradiction'}</span>
+                                    <span class="px-2 py-1 text-xs rounded-full ${
+                                        c.severity === 'High' ? 'bg-red-500 text-white' :
+                                        c.severity === 'Medium' ? 'bg-yellow-500 text-white' :
+                                        'bg-green-500 text-white'
+                                    }">${c.severity}</span>
+                                </div>
+                                <p class="text-gray-700 text-sm">${c.description}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('results').innerHTML = html;
+        }
+    </script>
+</body>
+</html>
+
